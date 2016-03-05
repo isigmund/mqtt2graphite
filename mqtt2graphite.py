@@ -25,10 +25,10 @@ posBracket = CARBON_SERVER.find('(')
 if posColon >= 0:
     CARBON_HOST = CARBON_SERVER[0:posColon]
     if posBracket >= 0:
-        CARBON_PORT = CARBON_SERVER[posColon+1:posBracket]
+        CARBON_PORT = int(CARBON_SERVER[posColon+1:posBracket])
         CARBON_PROTOCOL = CARBON_SERVER[posBracket+1:-1]
     else:
-        CARBON_PORT = CARBON_SERVER[posColon+1:]
+        CARBON_PORT = int(CARBON_SERVER[posColon+1:])
 else:
     CARBON_HOST = CARBON_SERVER
 
