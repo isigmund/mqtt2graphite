@@ -20,6 +20,21 @@ CARBON_PORT = 2003
 CARBON_PROTOCOL = 'UDP'
 
 '''TODO: Parse CARBON_SERVER for HOST, PORT and PROTOCOL'''
+posColon = CARBON_SERVER.find(':')
+posBracket = CARBON_SERVER.find('(')
+if posColon >= 0:
+    CARBON_HOST = CARBON_SERVER[0:posColon]
+    if posBracket >= 0:
+        CARBON_PORT = CARBON_SERVER[posColon+1:posBracket]
+        CARBON_PROTOCOL = CARBON_SERVER[posBracket+1:-1]
+    else:
+        CARBON_PORT = CARBON_SERVER[posColon+1:]
+else:
+    CARBON_HOST = CARBON_SERVER
+
+
+
+
 
 
 LOGFORMAT = '%(asctime)-15s %(message)s'
@@ -185,11 +200,11 @@ def main():
         sys.exit(1)
 
     userdata = {
-        'sock'      : sock,
+        'sock'            : sock,
         'carbon_host'     : CARBON_HOST,
         'carbon_port'     : CARBON_PORT,
         'carbon_protocol' : CARBON_PROTOCOL,
-        'map'       : map,
+        'map'             : map,
     }
     mqttc = paho.Client(client_id, clean_session=True, userdata=userdata)
     global mqttc
