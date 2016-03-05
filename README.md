@@ -19,10 +19,14 @@ numeric, these are then sent off to Carbon (see example below)
 ## Installation and Configuration
 
 * Configure the mqtt2graphite init script
+carbon.hotname can be in the folloing forats:
+hostname                 -defaults to port 2003, and protocol UDP
+hostname:port            -defaults to protocol UDP
+hostname:port(protocol)  -protocol is either TCP or UDP
 
 ```bash
 pip install git+https://github.com/jpmens/mqtt2graphite.git
-./init_server.sh mqtt.hostname
+./init_server.sh mqtt.hostname carbon.hostname:port(protocol) [Debug mode (True/False)]
 ```
 
 ## Running

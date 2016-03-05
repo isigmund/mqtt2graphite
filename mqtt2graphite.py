@@ -11,10 +11,16 @@ import time
 import socket
 import json
 import signal
+import struct
 
 MQTT_HOST = os.environ.get('MQTT_HOST', 'localhost')
-CARBON_SERVER = os.environ.get('CARBON_SERVER', '127.0.0.1')
+CARBON_SERVER = os.environ.get('CARBON_SERVER', '127.0.0.1:2003(UDP)')
+CARBON_HOST = '127.0.0.1'
 CARBON_PORT = 2003
+CARBON_PROTOCOL = 'UDP'
+
+'''TODO: Parse CARBON_SERVER for HOST, PORT and PROTOCOL'''
+
 
 LOGFORMAT = '%(asctime)-15s %(message)s'
 
@@ -57,9 +63,10 @@ def on_connect(mosq, userdata, rc):
 
 def on_message(mosq, userdata, msg):
 
-    sock = userdata['sock']
-    host = userdata['carbon_server']
-    port = userdata['carbon_port']
+    sock     = userdata['sock']
+    host     = userdata['carbon_host']
+    port     = userdata['carbon_port']
+    protocol = userdata['carbon_protocol']
     lines = []
     now = int(time.time())
 
@@ -110,7 +117,26 @@ def on_message(mosq, userdata, msg):
             message = '\n'.join(lines) + '\n'
             logging.debug("%s", message)
 
-            sock.sendto(message, (host, port))
+            if protocol == 'UDP':
+                sock.sendto(message, (host, port))
+            if protocol == 'TCP':
+                size = struct.pack('!L', len(message))
+                # send to carbon
+                try:
+                    sent = sock.sendall(size)
+                except:
+                    sent = 0
+                if sent == 0:
+                    logging.error("Error sending data to carbon server via TCP")
+
+                try:
+                    sent = sock.sendall(message)
+                except:
+                    sent = 0
+                if sent == 0:
+                    logging.error("Error sending data to carbon server via TCP")
+
+
   
 def on_subscribe(mosq, userdata, mid, granted_qos):
     pass
@@ -148,15 +174,21 @@ def main():
         map[topic] = (type, remap)
 
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if CARBON_PROTOCOL == 'UDP':
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if CARBON_PROTOCOL == 'TCP':
+            sock = socket.socket()
+            sock.connect( (CARBON_HOST, CARBON_PORT) )
+            sock.setblocking(0)
     except:
         sys.stderr.write("Can't create UDP socket\n")
         sys.exit(1)
 
     userdata = {
         'sock'      : sock,
-        'carbon_server' : CARBON_SERVER,
-        'carbon_port'   : CARBON_PORT,
+        'carbon_host'     : CARBON_HOST,
+        'carbon_port'     : CARBON_PORT,
+        'carbon_protocol' : CARBON_PROTOCOL,
         'map'       : map,
     }
     mqttc = paho.Client(client_id, clean_session=True, userdata=userdata)
