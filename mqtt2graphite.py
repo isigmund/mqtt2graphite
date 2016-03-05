@@ -19,7 +19,7 @@ CARBON_HOST = '127.0.0.1'
 CARBON_PORT = 2003
 CARBON_PROTOCOL = 'UDP'
 
-'''TODO: Parse CARBON_SERVER for HOST, PORT and PROTOCOL'''
+'''Parse CARBON_SERVER for HOST, PORT and PROTOCOL'''
 posColon = CARBON_SERVER.find(':')
 posBracket = CARBON_SERVER.find('(')
 if posColon >= 0:
@@ -31,11 +31,6 @@ if posColon >= 0:
         CARBON_PORT = CARBON_SERVER[posColon+1:]
 else:
     CARBON_HOST = CARBON_SERVER
-
-
-
-
-
 
 LOGFORMAT = '%(asctime)-15s %(message)s'
 
@@ -168,6 +163,7 @@ def main():
     logging.info("Starting %s" % client_id)
     logging.info("INFO MODE")
     logging.debug("DEBUG MODE")
+    logging.info("CARBON Server is %s on port %s (%s)" % (CARBON_HOST, CARBON_PORT, CARBON_PROTOCOL) )
 
     map = {}
     if len(sys.argv) > 1:
