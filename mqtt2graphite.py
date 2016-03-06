@@ -12,12 +12,13 @@ import socket
 import json
 import signal
 import struct
+import pickle
 
 MQTT_HOST = os.environ.get('MQTT_HOST', 'localhost')
-CARBON_SERVER = os.environ.get('CARBON_SERVER', '127.0.0.1:2003(UDP)')
+CARBON_SERVER = os.environ.get('CARBON_SERVER', '127.0.0.1:2004')
 CARBON_HOST = '127.0.0.1'
-CARBON_PORT = 2003
-CARBON_PROTOCOL = 'UDP'
+CARBON_PORT = 2004
+
 
 '''Parse CARBON_SERVER for HOST, PORT and PROTOCOL'''
 posColon = CARBON_SERVER.find(':')
@@ -26,7 +27,6 @@ if posColon >= 0:
     CARBON_HOST = CARBON_SERVER[0:posColon]
     if posBracket >= 0:
         CARBON_PORT = int(CARBON_SERVER[posColon+1:posBracket])
-        CARBON_PROTOCOL = CARBON_SERVER[posBracket+1:-1]
     else:
         CARBON_PORT = int(CARBON_SERVER[posColon+1:])
 else:
@@ -76,9 +76,8 @@ def on_message(mosq, userdata, msg):
     sock     = userdata['sock']
     host     = userdata['carbon_host']
     port     = userdata['carbon_port']
-    protocol = userdata['carbon_protocol']
-    lines = []
     now = int(time.time())
+    tuples = ([])
 
     map = userdata['map']
     # Find out how to handle the topic in this message: slurp through
@@ -101,7 +100,7 @@ def on_message(mosq, userdata, msg):
                 '''Number: obtain a float from the payload'''
                 try:
                     number = float(msg.payload)
-                    lines.append("%s %f %d" % (carbonkey, number, now))
+                    tuples.append((carbonkey, (now,number)))
                 except ValueError:
                     logging.info("Topic %s contains non-numeric payload [%s]" % 
                             (msg.topic, msg.payload))
@@ -114,7 +113,7 @@ def on_message(mosq, userdata, msg):
                     st = json.loads(msg.payload)
                     for k in st:
                         if is_number(st[k]):
-                            lines.append("%s.%s %f %d" % (carbonkey, k, float(st[k]), now))
+                            tuples.append(("%s.%s" % (carbonkey, k), (now,float(st[k]))))
                 except:
                     logging.info("Topic %s contains non-JSON payload [%s]" %
                             (msg.topic, msg.payload))
@@ -124,29 +123,24 @@ def on_message(mosq, userdata, msg):
                 logging.info("Unknown mapping key [%s]", type)
                 return
 
-            message = '\n'.join(lines) + '\n'
-            logging.debug("%s", message)
+            # prepare data
+            package = pickle.dumps(tuples, 1)
+            size = struct.pack('!L', len(package))
+            logging.debug("%s", str(tuples))
 
-            if protocol == 'UDP':
-                sock.sendto(message, (host, port))
-            if protocol == 'TCP':
-                size = struct.pack('!L', len(message))
-                # send to carbon
-                try:
-                    sent = sock.sendall(size)
-                except:
-                    sent = 0
-                if sent == 0:
-                    logging.error("Error sending data to carbon server via TCP")
-
-                try:
-                    sent = sock.sendall(message)
-                except:
-                    sent = 0
-                if sent == 0:
-                    logging.error("Error sending data to carbon server via TCP")
-
-
+            # send to carbon pickle
+            try:
+                sent = sock.sendall(size)
+            except:
+                sent = 0
+            if sent == 0:
+                logging.error("Error sending data to carbon server via TCP")
+            try:
+                sent = sock.sendall(package)
+            except:
+                sent = 0
+            if sent == 0:
+                logging.error("Error sending data to carbon server via TCP")
   
 def on_subscribe(mosq, userdata, mid, granted_qos):
     pass
@@ -163,7 +157,7 @@ def main():
     logging.info("Starting %s" % client_id)
     logging.info("INFO MODE")
     logging.debug("DEBUG MODE")
-    logging.info("CARBON Server is %s on port %s (%s)" % (CARBON_HOST, CARBON_PORT, CARBON_PROTOCOL) )
+    logging.info("CARBON Server is %s on port %s" % (CARBON_HOST, CARBON_PORT) )
 
     map = {}
     if len(sys.argv) > 1:
@@ -185,25 +179,21 @@ def main():
         map[topic] = (type, remap)
 
     try:
-        if CARBON_PROTOCOL == 'UDP':
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        if CARBON_PROTOCOL == 'TCP':
-            sock = socket.socket()
-            sock.connect( (CARBON_HOST, CARBON_PORT) )
-            sock.setblocking(0)
+        sock = socket.socket()
+        sock.connect( (CARBON_HOST, CARBON_PORT) )
+        sock.setblocking(0)
     except:
-        sys.stderr.write("Can't create UDP socket\n")
+        sys.stderr.write("Can't create TCP socket\n")
         sys.exit(1)
 
     userdata = {
         'sock'            : sock,
         'carbon_host'     : CARBON_HOST,
         'carbon_port'     : CARBON_PORT,
-        'carbon_protocol' : CARBON_PROTOCOL,
         'map'             : map,
     }
-    mqttc = paho.Client(client_id, clean_session=True, userdata=userdata)
     global mqttc
+    mqttc = paho.Client(client_id, clean_session=True, userdata=userdata)
     mqttc.on_message = on_message
     mqttc.on_connect = on_connect
     mqttc.on_disconnect = on_disconnect
